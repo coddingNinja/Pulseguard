@@ -1,85 +1,96 @@
-# PulseGuard: rPPG engine (Ahmad's part: A1-A6)
+# PulseGuard: Deepfake Detection Through Biological Signals
 
-Detects deepfakes by checking for a real heartbeat signal (rPPG) in face videos.
-This repo holds the signal engine. **Done so far: A1 (face tracking) and A2 (ROI extraction).**
-A3 (pulse recovery), A4/A6 (features) are stubs with the final signatures.
+> A prototype detecting synthetic face videos by verifying genuine physiological blood-flow (**rPPG**) signals.
 
-## Install
+**Team:**
+- **Ahmad Haseeb Butt:** rPPG extraction engine (Tracking, ROIs, POS/CHROM recovery, spectral & coherence features)
+- **Muhammad Hamza Tahir:** Data splits, batch extraction, baseline & classifier modeling (XGBoost/SVM)
+- **Hafiz Hamza Ahmad:** Explainability views, Streamlit application, evaluation report & slides
 
-Python 3.10 - 3.13.
+---
+
+## 1. Quickstart
+
+### Prerequisites & Installation
+Python 3.10 – 3.13 on macOS / Linux / Windows.
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The first time the tracker runs it downloads MediaPipe's `face_landmarker.task`
-(about 4 MB) into `models/`. To do it up front:
-
+Download the MediaPipe Face Mesh model file (`models/face_landmarker.task`):
 ```bash
 python scripts/download_model.py
 ```
 
-If your network blocks the download, fetch the file manually from the URL printed
-in the error and save it as `models/face_landmarker.task`.
+---
 
-## Try it on your own webcam clip
+## 2. Running Tests
 
-Record 15-20 s of your face (good light, sit still) and save it as `data/raw/me.mp4`.
-
-```bash
-python scripts/draw_rois.py data/raw/me.mp4          # check the 16 masks sit on skin
-python scripts/draw_rois.py data/raw/me.mp4 --indices  # also shows landmark numbers, for tuning
-python scripts/run_roi_on_video.py data/raw/me.mp4   # extract + print summary (cached)
-python scripts/run_roi_on_video.py data/raw/me.mp4 --force   # ignore the cache
-```
-
-Always run `draw_rois.py` first. The region landmark lists in `pulseguard/roi.py`
-are a first guess (see the TODO at the top of that file); fix them there if a
-mask lands on an eye, lip, hair or the background. Only edit the right-hand lists;
-the left side is mirrored automatically.
-
-## Interface contract (do not change signatures)
-
-```python
-extract_rois(video_path) -> (rois, fps)       # rois: np.ndarray [16, T, 3], mean RGB per region per frame
-recover_pulse(rois, fps, method="pos")        # -> dict(signals[16, T], bpm, snr, peak_power)   [A3, stub]
-compute_features(signal_dict)                 # -> np.ndarray, fixed-order feature vector       [A4/A6, stub]
-```
-
-`extract_rois_ex(video_path)` is the same thing but also returns `detection_rate`.
-Region order on axis 0 is `pulseguard.roi.REGION_NAMES` (16 names). "r"/"l" are the
-subject's right/left.
-
-Behaviour worth knowing:
-- Frames where the face is lost are bridged by holding the last landmarks for up to
-  10 frames. Longer gaps are filled by linear interpolation of the colour traces,
-  so T always equals the number of video frames.
-- A video with no face at all returns an all-NaN array and `detection_rate == 0`.
-- Results are cached in `data/cache/<video_name>.npz` (rois, fps, detection_rate).
-  Use `--force` / `force=True` after changing the smoother or the region lists.
-
-## Layout
-
-```
-pulseguard/tracking.py   A1: MediaPipe FaceLandmarker + smoothing + gap handling
-pulseguard/roi.py        A2: 16 regions, mean RGB, interpolation, cache, drawing
-pulseguard/pulse.py      A3: stub
-pulseguard/features.py   A4/A6: stub
-pulseguard/utils.py      video reading, cache helpers
-scripts/                 draw_rois.py, run_roi_on_video.py, download_model.py
-tests/                   pytest (uses a fake tracker, so no model file needed)
-```
-
-## Tests
+Run the full pytest suite (tracking, ROIs, pulse recovery, coherence, features, and contract validation):
 
 ```bash
-pytest
+pytest -q
 ```
 
-One test uses the real MediaPipe model and is skipped until `models/face_landmarker.task` exists.
+---
 
-## Note on MediaPipe versions
+## 3. Usage & Modes
 
-Recent MediaPipe releases (0.10.32 checked) no longer include the old
-`mp.solutions.face_mesh` API, so this repo uses the newer `FaceLandmarker` (Tasks API).
-It returns the same 468-point mesh; the 10 extra iris points are dropped.
+### Live Webcam Pulse Extraction
+Launch the real-time webcam monitor with POS pulse recovery and 10-second warm-up:
+```bash
+python scripts/webcam_roi.py --method pos
+```
+*(Options: `--method chrom`, `--mirror`, `--seconds 30`, `--camera 1`)*
+
+### Interactive Streamlit Web Dashboard
+Launch the multi-tab demo app (Video Upload Analysis, Live Webcam, and Methodology):
+```bash
+streamlit run app.py
+```
+
+### Offline Video Extraction & Pulse Analysis
+1. Place your video in `data/raw/my_clip.mp4`.
+2. Check facial masks on a sample frame:
+   ```bash
+   python scripts/draw_rois.py data/raw/my_clip.mp4
+   ```
+3. Extract 16 ROI traces to disk cache (`data/cache/my_clip.npz`):
+   ```bash
+   python scripts/run_roi_on_video.py data/raw/my_clip.mp4
+   ```
+4. Run POS & CHROM pulse analysis and generate comparison waveforms and spectra:
+   ```bash
+   python scripts/pulse_from_cache.py data/cache/my_clip.npz
+   ```
+
+### UBFC-rPPG Ground-Truth Validation
+Verify heart rate recovery against contact sensor ground truth:
+```bash
+# Real dataset validation (once placed in data/ubfc/):
+python scripts/validate_ubfc.py --data-dir data/ubfc --method pos
+
+# Synthetic verification self-test:
+python scripts/validate_ubfc.py --synthetic-selftest
+```
+
+### Generate Mock Data for UI/Modeling Work
+Generate mock signal dictionaries and `.npz` cache files without video:
+```bash
+python scripts/make_mock_data.py
+```
+
+---
+
+## 4. Documentation
+
+- [System Architecture](file:///Users/apple/Documents/pulseguard/docs/ARCHITECTURE.md): Data flow diagram and module ownership map.
+- [Frozen Interface Contract](file:///Users/apple/Documents/pulseguard/docs/INTERFACE.md): Exact signatures and worked example.
+- [Team Task Matrix](file:///Users/apple/Documents/pulseguard/docs/TASKS.md): Task breakdown, hours, and status.
+- [Feature Specification](file:///Users/apple/Documents/pulseguard/docs/features.md): 72-feature vector and coherence math.
+- [UBFC Ground-Truth Validation](file:///Users/apple/Documents/pulseguard/docs/ubfc_validation.md): Ground-truth comparison and evaluation metrics.
+- [Demo Recording Script](file:///Users/apple/Documents/pulseguard/docs/demo_script.md): 2.5-minute shot-by-shot presentation script.
+- [Dataset Guide](file:///Users/apple/Documents/pulseguard/data/README.md): Setup instructions for Celeb-DF, FF++, and UBFC.

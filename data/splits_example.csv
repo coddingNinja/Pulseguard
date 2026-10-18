@@ -1,0 +1,11 @@
+video_id,label,identity,dataset,compression_level,split
+001_002,fake,id_001,celeb_df_v2,c23,train
+001_003,fake,id_001,celeb_df_v2,c23,train
+001,real,id_001,celeb_df_v2,raw,train
+002_004,fake,id_002,celeb_df_v2,c23,train
+002,real,id_002,celeb_df_v2,raw,train
+010_015,fake,id_010,celeb_df_v2,c23,val
+010,real,id_010,celeb_df_v2,raw,val
+050_055,fake,id_050,celeb_df_v2,c23,test
+050,real,id_050,celeb_df_v2,raw,test
+060_062,fake,id_060,faceforensics,c40,test
